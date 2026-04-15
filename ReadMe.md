@@ -1,286 +1,210 @@
-# CrowPanel Meeting Room - ESP32S3
+# Meeting Room
+
+Meeting Room is an ESP-IDF firmware project for an ESP32-S3 based meeting-room panel with an `800x480` touch display.
+The device is intended to run as the main room display in a local meeting-room setup.
 
-**CrowPanel Meeting Room** is a full-featured firmware for smart control of meeting rooms and conference spaces, built for the ELECROW CrowPanel Advance platform with a touchscreen and cloud service support.
+It combines room status presentation, local device setup, weather, QR-based information pages, and communication with a smaller auxiliary `3.5-inch` panel.
+The UI supports both English and Chinese.
 
-## 📋 Description
+## Features
 
-The firmware is intended for the ELECROW CrowPanel Advance (5.0″ and 7.0″ variants) based on the ESP32-S3 with a display resolution of 800×480 pixels.
-The application supports both hardware revisions (v1.0 and v1.1) and automatically detects the board revision at startup.
+- Main room dashboard for daily operation
+- Meeting-room occupancy status and countdown display
+- Weather widget on the main screen
+- Fullscreen weather view with forecast and detail cards
+- Local Wi-Fi onboarding through a setup portal
+- Runtime device setup page available on the local network
+- Info screen with QR codes
+- English / Chinese interface
+- Adjustable sleep / wake behavior for the screen
+- UDP-based integration with the auxiliary `3.5-inch` panel
 
-The system provides an intuitive touch interface for managing a meeting room schedule, booking time slots, displaying weather information, and monitoring indoor air quality.
+## Hardware / Software
 
----
+- MCU: `ESP32-S3`
+- Display: `800x480` touch panel
+- Framework: [ESP-IDF](https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/)
+- UI stack: [LVGL](https://lvgl.io/)
 
-## ⚙️ System Requirements
+## Project Layout
 
-Before installation make sure you have:
+- `main/` - application startup, Wi-Fi, setup portal, time sync, sleep logic, auxiliary-panel UDP link
+- `components/weather_module/` - weather service, weather widget, fullscreen weather UI
+- `components/ui/` - LVGL screens and UI assets
+- `components/language_manager/` - language selection and persistence
+- `main/include/aux_udp_protocol.h` - UDP protocol shared with the auxiliary `3.5-inch` panel
 
-* **Operating System:** Windows 10 or Windows 11 (64-bit)
-* **USB driver:** CP210x USB-to-UART (for board communication)
-* **Connection:** USB-C cable to connect the board to your computer
+## What The Main Panel Does
 
----
+At runtime the main panel is responsible for:
+- showing the room name and current room state
+- presenting booking / meeting progress information
+- exposing local setup screens
+- storing runtime configuration in NVS
+- fetching and displaying weather data
+- generating and showing Info screen QR links
+- broadcasting room state to the auxiliary `3.5-inch` panel
+- handling pairing with the auxiliary panel
 
-## ✨ Key Features
+## Wi-Fi Setup
 
-### 🗓️ Meeting Management
+The project uses a two-step setup model.
 
-* **Room booking** — create and edit bookings directly from the panel
-* **Google Calendar integration** — automatically display schedule from a cloud calendar
-* **Schedule view** — clear representation of upcoming meetings on the screen
+### Initial Wi-Fi onboarding
 
-### 🌤️ Weather Information
+If the device does not yet have working Wi-Fi credentials, it can start its own setup access point and configuration page.
+That page is used to save the target Wi-Fi SSID and password.
 
-* **Mini weather widget** — compact info on the dashboard (current temperature and conditions)
-* **Detailed weather screen** — a dedicated screen with extended weather data
-* **3-day forecast** — planning assistance using the short-term forecast
+Typical flow:
+1. Power on the panel.
+2. Connect to the panel's temporary setup network.
+3. Open the setup page in a browser.
+4. Enter the target Wi-Fi credentials.
+5. Save settings.
+6. Wait for the device to reconnect to the local network.
 
-### 💨 Air Quality Monitoring
+### Runtime device setup
 
-* **IAQ (Indoor Air Quality) index** — assessment of indoor air quality
-* **CO₂ level** — monitoring of carbon dioxide concentration
+Once the panel is already on the local network, it exposes a runtime `Device setup` page.
+This page is intended for same-network configuration changes without reflashing the device.
 
-### 🌐 Localization
+The runtime setup page is used for:
+- panel name
+- weather API key
+- company website link for the Info screen
+- office map link for the Info screen
 
-* **Supported languages:** English (default), Deutsch (German)
+## Weather
 
-### 😴 Sleep / Power Saving Mode
+The weather feature is integrated into the main panel UI.
+It includes:
+- current conditions
+- feels-like temperature
+- wind / humidity / pressure
+- sunrise / sunset
+- forecast cards
+- metric / imperial unit switching
 
-* **Auto sleep** — the device automatically enters a low-power mode after 5 minutes of inactivity (no touchscreen interaction)
-* **Quick wake** — any touch instantly wakes the device and returns it to full operation
+### Weather provider
 
-### 📱 Wireless Connectivity
+Weather data is fetched from [OpenWeather](https://openweathermap.org/).
+To enable live weather, provide your own API key in the runtime `Device setup` page.
 
-* **Wi-Fi** — full wireless connectivity support
-* **Cloud sync** — calendar and weather data fetched via the internet
+Setup flow:
+1. Connect the panel to Wi-Fi.
+2. Open `Device setup` on the same local network.
+3. Enter the OpenWeather API key.
+4. Save settings.
 
----
+The key is stored locally in NVS and used by the running weather module.
 
-## 📺 Available Screens
+## Info Screen
 
-| Screen                      | Function                                                                        |
-| --------------------------- | ------------------------------------------------------------------------------- |
-| **Main Screen (Dashboard)** | Current time, mini weather widget, current meeting status, quick action buttons |
-| **Calendar**                | List of all meetings with times and titles from the connected calendar          |
-| **Weather**                 | Detailed weather information, 3-day forecast, temperature charts                |
-| **Climate**                 | Indoor air quality monitoring (IAQ) and CO₂ level (requires EnSens module)      |
-| **Booking**                 | Create new bookings                                                             |
-| **Settings**                | Language selection, Wi-Fi setup, configure data sources for Google Calendar     |
+The Info screen can display QR codes that point to room-related links.
 
-## Main Screen (Dashboard)
+Current supported links:
+- company website
+- office map
 
-![Main screen — mini widget and quick buttons](assets/images/dashboard.png)
+The guest Wi-Fi QR is generated from the currently saved Wi-Fi credentials.
+These values are configured through the runtime `Device setup` page.
 
-## Weather Screen (Weather)
+## Language Support
 
-![Weather screen — detailed forecast](assets/images/weather_screen.png)
+The firmware UI supports:
+- English
+- Chinese
 
-## Booking Screen (Booking room)
+Some weather description strings returned by the external weather provider may still remain in English.
 
-![Booking screen — booking UI](assets/images/booking.png)
+## Sleep / Wake Behavior
 
----
+The panel includes automatic sleep management.
+The firmware can:
+- track inactivity
+- dim / sleep the display after the configured timeout
+- wake on user interaction
+- keep the panel active during an ongoing booking
 
-## 🚀 Installation Guide
+Sleep-related settings are persisted in NVS.
 
-### Step 1: Flash the firmware
+## Integration With The Auxiliary `3.5-inch` Panel
 
-1. **Connect the board to your computer** via a USB-C cable.
+This repository contains the main panel in a two-panel setup.
+The smaller `3.5-inch` panel is a separate ESP-IDF project that works as an auxiliary room-status display.
 
-2. **Run the flasher utility:**
+### How the integration works
 
-   * Locate `flash_tool.exe` in the repository
-   * Run it — the tool will automatically detect the COM port
-   * Make sure the CP210x driver is installed on your system
-   * Follow the on-screen instructions
+The main panel:
+- broadcasts discovery / beacon packets
+- publishes room-state packets over UDP
+- accepts pairing requests from the auxiliary panel
+- stores pairing state for the connected auxiliary device
 
-3. **Wait for completion:**
+The auxiliary panel:
+- joins the same local Wi-Fi network
+- discovers the main panel
+- pairs with the selected main panel
+- receives room state from the main panel and displays it locally
 
-   * Flashing takes a few minutes
-   * After the process finishes the board will automatically reboot
-   * The main application screen will appear on the display
+### Shared protocol
 
-### Step 3: Connect to Wi-Fi
+The shared packet format is defined here:
+[main/include/aux_udp_protocol.h](/Users/vladislav/esp/MyCube/main/include/aux_udp_protocol.h)
 
-You can send Wi-Fi credentials using the app or the companion tool `CrowPanelConfiguration.exe`:
+Relevant details:
+- transport: UDP
+- port: `33334`
+- packet types: beacon, state, pair request, pair ack, pair nack
 
-1. **Open the configuration utility** on your PC
-2. **Enter Wi-Fi details:**
+### Typical deployment flow
 
-   * SSID (network name)
-   * Network password
-3. **Select the COM port** that the board is connected to
-4. **Click "Send"** to transmit the configuration
+1. Flash the main panel firmware from this repository.
+2. Flash the auxiliary `3.5-inch` panel firmware from its repository.
+3. Connect both devices to the same local Wi-Fi network.
+4. Allow the auxiliary panel to discover the main panel.
+5. Pair the auxiliary panel with the target room panel.
+6. The auxiliary panel starts showing live room state from the main panel.
 
-Wi-Fi credentials are stored in the device non-volatile memory and used automatically on every boot.
+## Build
 
-### Step 4: Connect Google Calendar (optional)
+Typical ESP-IDF workflow:
 
-To show events from Google Calendar:
-
-1. **Get the ICS link:**
-
-   * Open Google Calendar on your computer or smartphone
-   * Under **My calendars** find the calendar you want
-   * Click the three dots (⋮) next to the calendar name
-   * Choose **Settings and sharing**
-   * Scroll down to **Integrate calendar**
-   * Copy the **Secret address in iCal format** — this is the ICS link you need
-
-2. **Send the link to the device:**
-
-   * Use `CrowPanelConfiguration.exe`
-   * Paste the ICS URL
-   * Select the device COM port
-   * Click **Send**
-
-3. **Verify:**
-
-   * Open the **Calendar** screen on the panel
-   * Check that your events appear
-
-### Step 5: Connect the air quality module (optional)
-
-If you want to monitor air quality:
-
-1. **Install the EnSens module:**
-
-   * Locate the W-M connector on the board
-   * Gently insert the EnSens module into that connector
-
-2. **Check pin orientation:**
-
-   * The board has markings next to the connector
-   * Make sure the module is aligned with the 0/1 markings
-
-3. **Use the Climate screen:**
-
-   * From the dashboard open the **Climate** screen — IAQ and CO₂ values should be displayed
-
----
-
-## 📁 Repository Structure
-
-```
-Meeting-room/
-├── README.md                      
-├── Binaries/ - folder with binaries to flash to your panel
-├── flash_tool.exe - automatic flasher for your panel
-├── CrowPanelConfiguration.exe - configuration tool (Wi-Fi, calendar setup)
-```
-
----
-
-## 🔧 Technical Specifications
-
-| Parameter               | Value                                 |
-| ----------------------- | ------------------------------------- |
-| **Microcontroller**     | ESP32-S3                              |
-| **Display resolution**  | 800 × 480 pixels                      |
-| **Display type**        | TFT LCD with touch                    |
-| **Enclosure**           | ELECROW CrowPanel Advance 5.0″ / 7.0″ |
-| **Supported revisions** | v1.0, v1.1 (auto-detection)           |
-| **Interfaces**          | WiFi 802.11 b/g/n, USB-C (UART)       |
-| **RAM**                 | 8 MB PSRAM                            |
-| **Flash**               | 16 MB QSPI Flash                      |
-
----
-
-## 📊 Data Sources
-
-| Feature         | Source                    | Requirements                        |
-| --------------- | ------------------------- | ----------------------------------- |
-| **Calendar**    | Google Calendar (via ICS) | Internet connection, Google account |
-| **Weather**     | OpenWeatherMap API        | Internet connection                 |
-| **Air quality** | EnSens module (local)     | Connected sensor module             |
-| **Time**        | NTP server                | Internet connection                 |
-
----
-
-## ⚡ Quick Start
-
-```
-1. Flash the firmware using flash_tool.exe
-2. Connect to Wi-Fi using the built-in configuration UI
-3. Add your Google Calendar ICS link
-4. (Optional) Attach the EnSens air quality module
-5. Start using the application!
+```bash
+idf.py set-target esp32s3
+idf.py build
 ```
 
----
+Flash example:
 
-## 🐛 Troubleshooting
+```bash
+idf.py -p <PORT> flash
+```
 
-### Problem: The screen does not turn on after flashing
+Monitor example:
 
-**Solution:**
+```bash
+idf.py -p <PORT> monitor
+```
 
-* Check the USB cable connection
-* Ensure the firmware flashed without errors
-* Try power-cycling the board
-* If the problem persists, repeat the flashing process
+## Runtime Configuration Stored In NVS
 
-### Problem: Board not detected as a COM port
+The firmware stores runtime configuration such as:
+- Wi-Fi credentials
+- panel name
+- weather API key
+- weather units
+- sleep timeout
+- Info screen links
+- language selection
+- auxiliary panel pairing state
 
-**Solution:**
+## Related Project
 
-* Make sure the CP210x driver is installed: [https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers](https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers)
-* Try a different USB cable
-* Reboot your PC
-* Check Device Manager for unknown devices
+The auxiliary panel project is the `3.5-inch` companion display that works together with this main panel firmware.
+Both projects are designed to run inside the same local meeting-room environment.
 
-### Problem: Wi-Fi does not connect
+## Third-Party Components
 
-**Solution:**
-
-* Verify the Wi-Fi password is correct
-* Ensure you are connecting to a 2.4 GHz network (ESP32-S3 does not support 5 GHz)
-* Try power-cycling the board
-
-### Problem: Calendar does not show events
-
-**Solution:**
-
-* Ensure the ICS link is copied completely and is correct
-* Check the board’s internet connection
-* Make sure the Google Calendar actually contains events for the selected dates
-* Try sending the ICS link again
-
-### Problem: EnSens module not detected
-
-**Solution:**
-
-* Ensure the module is fully and correctly seated in the W-M connector
-* Confirm the module orientation matches the 0/1 markings
-* Remove and reinsert the module, then reboot the board
-
----
-
-## 📋 Known Limitations
-
-* Active internet connection is required for weather and calendar data
-* Weather updates occur every 10 minutes
-* Calendar updates occur every 5 minutes
-* Maximum number of calendar events per day: 50
-* Default system language: English
-
----
-
-## 🔐 Security & Privacy
-
-* **Cloud data:** Google Calendar access uses secure HTTPS connections
-* **Local storage:** Weather and calendar data are stored locally on the device and not synchronized elsewhere
-
----
-
-## 📦 Installing the CP210x driver
-
-If the board is not recognized by your PC:
-
-1. Go to [https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers](https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers)
-2. Download the driver for Windows (64-bit)
-3. Install the driver following the vendor instructions
-4. Reboot your computer
-5. Connect the board — it should appear in Device Manager
-
----
+This repository includes third-party components under `components/`, including LVGL and other ESP-IDF dependencies.
+Please review their original licenses before redistribution.
